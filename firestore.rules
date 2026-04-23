@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin()     { return isSignedIn() && getRole() == 'admin'; }
+    function isOrganizer() { return isSignedIn() && getRole() == 'organizer'; }
+    function isStudent()   { return isSignedIn() && getRole() == 'student'; }
+
+    // ── Users collection ──────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read:   if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if request.auth.uid == uid;
+      allow update: if request.auth.uid == uid || isAdmin();
+    }
+
+    // ── Events collection ─────────────────────────────────────────────────────
+    match /events/{eventId} {
+      // Anyone signed in can read approved events
+      allow read: if isSignedIn() && (
+        resource.data.status == 'approved' ||
+        isAdmin() ||
+        (isOrganizer() && resource.data.organizerUid == request.auth.uid)
+      );
+      // Organizers create events (always pending)
+      allow create: if isOrganizer() &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.organizerUid == request.auth.uid;
+      // Organizers update their own pending events; admins can update status
+      allow update: if isAdmin() ||
+        (isOrganizer() && resource.data.organizerUid == request.auth.uid &&
+         resource.data.status != 'approved');
+    }
+
+    // ── Registrations collection ──────────────────────────────────────────────
+    match /registrations/{regId} {
+      allow read:   if isSignedIn() && (
+        resource.data.studentUid == request.auth.uid || isAdmin() || isOrganizer()
+      );
+      allow create: if isStudent() && request.resource.data.studentUid == request.auth.uid;
+      allow delete: if isStudent() && resource.data.studentUid == request.auth.uid;
+    }
+
+    // ── Feedback collection ───────────────────────────────────────────────────
+    match /feedback/{feedbackId} {
+      allow read:   if isAdmin() || isOrganizer();
+      allow create: if isStudent() && request.resource.data.studentUid == request.auth.uid;
+    }
+
+    // ── Notifications collection ──────────────────────────────────────────────
+    match /notifications/{notifId} {
+      allow read, update: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create:       if isAdmin();
+    }
+  }
+}

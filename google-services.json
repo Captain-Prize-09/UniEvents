@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "84837301158",
+    "project_id": "trinityems",
+    "storage_bucket": "trinityems.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:84837301158:android:db4bc54fbf72490d47ad67",
+        "android_client_info": {
+          "package_name": "com.trinityuniversity.ems"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnl2e_tAAEy0mLZm4NDhPWQJ8HC8CZgLQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,143 +1,65 @@
 # Trinity University EMS — Setup Guide
 
-## 1. Place Firebase Config Files
+This project is built with **Expo (SDK 54)** and **Firebase**.
 
-| File | Destination |
-|------|-------------|
-| `google-services.json` | `TrinityEMS/android/app/google-services.json` |
-| `GoogleService-Info.plist` | `TrinityEMS/ios/GoogleService-Info.plist` |
+## 1. Prerequisites
 
-> For Expo managed workflow, you can also place them at the **project root**  
-> (`TrinityEMS/google-services.json` and `TrinityEMS/GoogleService-Info.plist`).  
-> The `app.json` already has the `googleServicesFile` paths configured for both.
+- **Node.js** (v20 or newer recommended)
+- **Expo Go** app on your mobile device (latest version from Play Store/App Store)
+- **Firebase Project** with Firestore and Authentication enabled.
 
----
+## 2. Configuration Files
 
-## 2. Firestore Indexes Required
+Ensure the following files are in the project root:
 
-In the Firebase Console → Firestore → Indexes, create the following **composite indexes**:
+| File                       | Purpose                                       |
+| -------------------------- | --------------------------------------------- |
+| `google-services.json`     | Firebase configuration for Android            |
+| `GoogleService-Info.plist` | Firebase configuration for iOS                |
+| `src/config/firebase.js`   | Web SDK configuration (API keys, project IDs) |
 
-| Collection | Fields | Order |
-|------------|--------|-------|
-| `events` | `status` ASC, `createdAt` DESC | Ascending / Descending |
-| `events` | `organizerUid` ASC, `createdAt` DESC | Ascending / Descending |
-| `registrations` | `studentUid` ASC | Ascending |
-| `notifications` | `uid` ASC, `createdAt` DESC | Ascending / Descending |
+> **Note:** These files are already configured for the current Firebase project (`trinityems-1c506`).
 
----
+## 3. Installation
 
-## 3. Upload Firestore Security Rules
+If you are transferring this project to a new system:
 
 ```bash
-firebase deploy --only firestore:rules
+# 1. Install dependencies
+npm install --legacy-peer-deps
+
+# 2. Start the development server
+npx expo start --tunnel
 ```
 
-Or paste the contents of `firestore.rules` directly in the Firebase Console.
+## 4. Firestore Setup (In Firebase Console)
 
----
+### Security Rules
 
-## 4. Create the First Admin User
+Copy the contents of `firestore.rules` and paste them into the **Rules** tab of your Firestore Database in the Firebase Console.
 
-1. Sign up normally through the app as any role.
-2. In the Firebase Console → Firestore → `users` collection, find the document for your UID.
+### Required Indexes
+
+Create the following **composite indexes** in the Firebase Console (Firestore -> Indexes):
+
+| Collection      | Fields                               | Order                  |
+| --------------- | ------------------------------------ | ---------------------- |
+| `events`        | `status` ASC, `createdAt` DESC       | Ascending / Descending |
+| `events`        | `organizerUid` ASC, `createdAt` DESC | Ascending / Descending |
+| `notifications` | `uid` ASC, `createdAt` DESC          | Ascending / Descending |
+
+## 5. Authentication
+
+Enable **Email/Password** sign-in in the Firebase Console (Authentication -> Sign-in method).
+
+## 6. Creating the First Admin User
+
+1. Sign up normally through the app.
+2. In the Firebase Console -> Firestore -> `users` collection, find your document.
 3. Manually change the `role` field to `"admin"`.
-4. Sign out and sign back in — the app will route you to the Admin dashboard.
+4. Sign out and sign back in to access the Admin Dashboard.
 
----
+## 7. Running the App
 
-## 5. Running the App
-
-```bash
-cd TrinityEMS
-npm start          # Expo Go (no native Firebase modules)
-npm run android    # Android emulator / device (requires native build)
-```
-
-> **Important:** `@react-native-firebase` requires a **native build**.  
-> Use `expo run:android` or `eas build` — Expo Go alone will not work.
-
-```bash
-npx expo run:android
-```
-
----
-
-## 6. FCM Push Notifications (Server-Side)
-
-When an admin approves/rejects an event, the app writes a notification document  
-to `notifications/{id}`. To send a real push notification to the device, call the  
-**Firebase Admin SDK** from a Cloud Function:
-
-```js
-// Cloud Function trigger on events/{eventId} status change
-exports.onEventStatusChange = functions.firestore
-  .document('events/{eventId}')
-  .onUpdate(async (change) => {
-    const after = change.after.data();
-    const before = change.before.data();
-    if (before.status === after.status) return;
-
-    const organizerDoc = await admin.firestore()
-      .collection('users').doc(after.organizerUid).get();
-    const fcmToken = organizerDoc.data()?.fcmToken;
-    if (!fcmToken) return;
-
-    return admin.messaging().send({
-      token: fcmToken,
-      notification: {
-        title: after.status === 'approved'
-          ? `Event Approved: ${after.title}`
-          : `Event Rejected: ${after.title}`,
-        body: after.adminNote || 'Check the app for details.',
-      },
-    });
-  });
-```
-
----
-
-## Project Structure
-
-```
-TrinityEMS/
-├── App.js                        ← Entry point
-├── app.json                      ← Expo + Firebase plugin config
-├── firestore.rules               ← Security rules
-├── google-services.json          ← ← PLACE HERE (Android)
-├── GoogleService-Info.plist      ← ← PLACE HERE (iOS)
-└── src/
-    ├── config/
-    │   └── firebase.js           ← Service exports + constants
-    ├── contexts/
-    │   └── AuthContext.js        ← Auth state + role provider
-    ├── hooks/
-    │   └── useFCM.js             ← FCM permission + message handler
-    ├── navigation/
-    │   ├── AppNavigator.js       ← Role router
-    │   ├── AuthNavigator.js
-    │   ├── StudentNavigator.js
-    │   ├── OrganizerNavigator.js
-    │   └── AdminNavigator.js
-    ├── screens/
-    │   ├── auth/
-    │   │   ├── LoginScreen.js
-    │   │   ├── SignUpScreen.js
-    │   │   └── ForgotPasswordScreen.js
-    │   ├── student/
-    │   │   ├── EventFeedScreen.js       ← Real-time feed + search/filter
-    │   │   ├── EventDetailScreen.js     ← Registration toggle
-    │   │   ├── MyRegistrationsScreen.js
-    │   │   └── FeedbackScreen.js        ← Star rating + comment
-    │   ├── organizer/
-    │   │   ├── OrganizerDashboardScreen.js
-    │   │   ├── CreateEventScreen.js     ← Image upload → Storage
-    │   │   └── EditEventScreen.js
-    │   └── admin/
-    │       ├── AdminDashboardScreen.js  ← Stats overview
-    │       ├── PendingEventsScreen.js   ← Filter by status
-    │       └── EventReviewScreen.js     ← Approve / Reject + notify
-    └── services/
-        ├── authService.js        ← signIn / signUp / signOut / FCM token
-        ├── eventService.js       ← CRUD + real-time listeners
-        └── notificationService.js← FCM setup + Firestore notifications
-```
+- Use `npx expo start --tunnel` to run via Expo Go.
+- Use `npm run android` only if you have the Android SDK and a native environment set up.

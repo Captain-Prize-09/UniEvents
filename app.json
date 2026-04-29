@@ -14,24 +14,27 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.trinityuniversity.ems"
+      "bundleIdentifier": "com.trinityuniversity.ems",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "package": "com.trinityuniversity.ems",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1B2A6B"
       }
     },
     "plugins": [
-      "@react-native-community/datetimepicker",
       [
         "expo-notifications",
         {
           "icon": "./assets/logo-rounded.png",
           "color": "#1B2A6B"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-font"
     ],
     "web": {
       "favicon": "./assets/favicon.png"

@@ -35,24 +35,32 @@ service cloud.firestore {
         request.resource.data.status == 'pending' &&
         request.resource.data.organizerUid == request.auth.uid;
       // Organizers update their own pending events; admins can update status
+      // Students can increment/decrement registrationCount
       allow update: if isAdmin() ||
         (isOrganizer() && resource.data.organizerUid == request.auth.uid &&
-         resource.data.status != 'approved');
+         resource.data.status != 'approved') ||
+        (isSignedIn() &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registrationCount']));
     }
 
     // ── Registrations collection ──────────────────────────────────────────────
     match /registrations/{regId} {
-      allow read:   if isSignedIn() && (
-        resource.data.studentUid == request.auth.uid || isAdmin() || isOrganizer()
+      // Allow reading if the doc doesn't exist (for existence checks)
+      // or if the student matches the authenticated user
+      allow read: if isSignedIn() && (
+        !exists(/databases/$(database)/documents/registrations/$(regId)) ||
+        resource.data.studentUid == request.auth.uid || 
+        isAdmin() || 
+        isOrganizer()
       );
-      allow create: if isStudent() && request.resource.data.studentUid == request.auth.uid;
-      allow delete: if isStudent() && resource.data.studentUid == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.studentUid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.studentUid == request.auth.uid;
     }
 
     // ── Feedback collection ───────────────────────────────────────────────────
     match /feedback/{feedbackId} {
       allow read:   if isAdmin() || isOrganizer();
-      allow create: if isStudent() && request.resource.data.studentUid == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.studentUid == request.auth.uid;
     }
 
     // ── Notifications collection ──────────────────────────────────────────────

@@ -9,11 +9,10 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Image,
 } from "react-native";
-import DateTimePicker, {
-  DateTimePickerAndroid,
-} from "@react-native-community/datetimepicker";
-import { updateEvent } from "../../services/eventService";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { updateEvent, resolveImageUrl } from "../../services/eventService";
 
 const CATEGORIES = ["Academic", "Sports", "Cultural", "Workshop", "Other"];
 
@@ -38,6 +37,23 @@ function parseDateString(str) {
   return isNaN(y) ? new Date() : new Date(y, m - 1, d);
 }
 
+function parseTimeString(timeStr) {
+  if (!timeStr) return new Date();
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s(AM|PM)$/);
+  if (!match) return new Date();
+
+  let [_, hours, minutes, ampm] = match;
+  hours = parseInt(hours, 10);
+  minutes = parseInt(minutes, 10);
+
+  if (ampm === "PM" && hours < 12) hours += 12;
+  if (ampm === "AM" && hours === 12) hours = 0;
+
+  const d = new Date();
+  d.setHours(hours, minutes, 0, 0);
+  return d;
+}
+
 export default function EditEventScreen({ route, navigation }) {
   const { event } = route.params;
   const [form, setForm] = useState({
@@ -47,48 +63,49 @@ export default function EditEventScreen({ route, navigation }) {
     time: event.time ?? "",
     location: event.location ?? "",
     capacity: event.capacity ? String(event.capacity) : "",
+    imageUrl: event.imageUrl ?? "",
     category: event.category ?? "Academic",
   });
   const [selectedDate, setSelectedDate] = useState(parseDateString(event.date));
-  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [selectedTime, setSelectedTime] = useState(parseTimeString(event.time));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   function updateField(key, value) {
+    if (key === "imageUrl") setImageError(false);
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   function onDateChange(event, date) {
-    if (Platform.OS === "android") setShowDatePicker(false);
-    if (date) {
-      setSelectedDate(date);
-      updateField("date", formatDate(date));
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+      if (event.type === "set" && date) {
+        setSelectedDate(date);
+        updateField("date", formatDate(date));
+      }
+    } else {
+      if (date) {
+        setSelectedDate(date);
+        updateField("date", formatDate(date));
+      }
     }
   }
 
   function onTimeChange(event, date) {
-    if (Platform.OS === "android") setShowTimePicker(false);
-    if (date) {
-      setSelectedTime(date);
-      updateField("time", formatTime(date));
+    if (Platform.OS === "android") {
+      setShowTimePicker(false);
+      if (event.type === "set" && date) {
+        setSelectedTime(date);
+        updateField("time", formatTime(date));
+      }
+    } else {
+      if (date) {
+        setSelectedTime(date);
+        updateField("time", formatTime(date));
+      }
     }
-  }
-
-  function showAndroidDatePicker() {
-    DateTimePickerAndroid.open({
-      value: selectedDate,
-      onChange: onDateChange,
-      mode: "date",
-    });
-  }
-
-  function showAndroidTimePicker() {
-    DateTimePickerAndroid.open({
-      value: selectedTime,
-      onChange: onTimeChange,
-      mode: "time",
-    });
   }
 
   async function handleUpdate() {
@@ -144,11 +161,8 @@ export default function EditEventScreen({ route, navigation }) {
         <TouchableOpacity
           style={styles.pickerBtn}
           onPress={() => {
-            if (Platform.OS === "android") {
-              showAndroidDatePicker();
-            } else {
-              setShowDatePicker(true);
-            }
+            setShowDatePicker(true);
+            setShowTimePicker(false);
           }}
         >
           <Text style={styles.pickerIcon}>📅</Text>
@@ -156,24 +170,37 @@ export default function EditEventScreen({ route, navigation }) {
             {form.date || "Select date"}
           </Text>
         </TouchableOpacity>
-        {Platform.OS === "ios" && showDatePicker && (
-          <DateTimePicker
-            value={selectedDate}
-            mode="date"
-            display="spinner"
-            onChange={onDateChange}
-          />
-        )}
+
+        {showDatePicker &&
+          (Platform.OS === "ios" ? (
+            <View style={styles.iosPickerContainer}>
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display="spinner"
+                onChange={onDateChange}
+              />
+              <TouchableOpacity
+                style={styles.doneBtn}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <Text style={styles.doneBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              onChange={onDateChange}
+            />
+          ))}
 
         <Text style={styles.label}>Time</Text>
         <TouchableOpacity
           style={styles.pickerBtn}
           onPress={() => {
-            if (Platform.OS === "android") {
-              showAndroidTimePicker();
-            } else {
-              setShowTimePicker(true);
-            }
+            setShowTimePicker(true);
+            setShowDatePicker(false);
           }}
         >
           <Text style={styles.pickerIcon}>🕐</Text>
@@ -181,14 +208,30 @@ export default function EditEventScreen({ route, navigation }) {
             {form.time || "Select time"}
           </Text>
         </TouchableOpacity>
-        {Platform.OS === "ios" && showTimePicker && (
-          <DateTimePicker
-            value={selectedTime}
-            mode="time"
-            display="spinner"
-            onChange={onTimeChange}
-          />
-        )}
+
+        {showTimePicker &&
+          (Platform.OS === "ios" ? (
+            <View style={styles.iosPickerContainer}>
+              <DateTimePicker
+                value={selectedTime}
+                mode="time"
+                display="spinner"
+                onChange={onTimeChange}
+              />
+              <TouchableOpacity
+                style={styles.doneBtn}
+                onPress={() => setShowTimePicker(false)}
+              >
+                <Text style={styles.doneBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <DateTimePicker
+              value={selectedTime}
+              mode="time"
+              onChange={onTimeChange}
+            />
+          ))}
 
         <Text style={styles.label}>Location *</Text>
         <TextInput
@@ -206,6 +249,34 @@ export default function EditEventScreen({ route, navigation }) {
           placeholder="Unlimited"
           placeholderTextColor="#9e9e9e"
         />
+
+        <Text style={styles.label}>Image URL</Text>
+        <TextInput
+          style={styles.input}
+          value={form.imageUrl}
+          onChangeText={(v) => updateField("imageUrl", v)}
+          placeholder="https://example.com/image.jpg"
+          placeholderTextColor="#9e9e9e"
+          keyboardType="url"
+          autoCapitalize="none"
+        />
+
+        {form.imageUrl ? (
+          <View style={styles.previewContainer}>
+            <Text style={styles.previewLabel}>Preview:</Text>
+            <Image
+              source={{ uri: resolveImageUrl(form.imageUrl) }}
+              style={styles.previewImage}
+              resizeMode="cover"
+              onError={() => setImageError(true)}
+            />
+            {imageError && (
+              <Text style={styles.errorText}>
+                Could not load image. Please check the URL.
+              </Text>
+            )}
+          </View>
+        ) : null}
 
         <Text style={styles.label}>Category</Text>
         <View style={styles.chipRow}>
@@ -311,4 +382,48 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  previewContainer: {
+    marginTop: 12,
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    backgroundColor: "#f9f9f9",
+    padding: 10,
+  },
+  previewLabel: {
+    fontSize: 12,
+    color: "#757575",
+    marginBottom: 8,
+    fontWeight: "600",
+  },
+  previewImage: {
+    width: "100%",
+    height: 150,
+    borderRadius: 8,
+  },
+  errorText: {
+    color: "#c62828",
+    fontSize: 12,
+    marginTop: 8,
+    fontWeight: "600",
+  },
+  iosPickerContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    marginTop: 8,
+    paddingBottom: 10,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  doneBtn: {
+    alignSelf: "flex-end",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  doneBtnText: {
+    color: "#1b5e20",
+    fontWeight: "700",
+    fontSize: 16,
+  },
 });
